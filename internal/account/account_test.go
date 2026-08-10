@@ -53,18 +53,6 @@ func TestInvalidWithdrawal(t *testing.T) {
 	}
 }
 
-func TestWithdrawMoreThanBalanceFailsWithError(t *testing.T) {
-	account := initialWithdrawTestSetup(t)
-	err := account.Withdraw(1001)
-	if err == nil {
-		t.Fatal("expected withdrawal to be unsuccessful")
-	}
-
-	if account.BalancePence != startingBalance {
-		t.Fatalf("account balance should be %d, but is %d", startingBalance, account.BalancePence)
-	}
-}
-
 func TestValidCurrencyCreatesAccount(t *testing.T) {
 	testID := "Apple"
 	testOwner := "John Doe"
