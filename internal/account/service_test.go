@@ -72,3 +72,46 @@ func TestCreateAccountFailsWhenSaveFailsForService(t *testing.T) {
 		t.Fatalf("account should have been nil but instead is %v", account)
 	}
 }
+
+func TestTransfer300Works(t *testing.T) {
+	amountToTransfer := 300
+	sourceId := "Acc1"
+	owner := "John Doe"
+	destinationId := "Acc2"
+
+	repo := NewMemoryRepository()
+	service := NewService(repo)
+	sourceAccount, err := service.CreateAccount(sourceId, owner, CurrencyGBP)
+	if err != nil {
+		t.Fatalf("error occurred when creating account: %v", err)
+	}
+	err = sourceAccount.Deposit(1000)
+	if err != nil {
+		t.Fatalf("error funding source account: %v", err)
+	}
+
+	destinationAccount, err := service.CreateAccount(destinationId, owner, CurrencyGBP)
+	if err != nil {
+		t.Fatalf("error occurred when creating account: %v", err)
+	}
+
+	err = destinationAccount.Deposit(500)
+	if err != nil {
+		t.Fatalf("error funding destination account: %v", err)
+	}
+
+	err = service.Transfer(sourceId, destinationId, int64(amountToTransfer))
+	if err != nil {
+		t.Fatalf("error transferring amount: %v", err)
+	}
+
+	sourceBalance := sourceAccount.BalancePence
+	if sourceBalance != 700 {
+		t.Fatalf("source account has incorrect balance, should have been 700, instead it's %v", sourceBalance)
+	}
+
+	destinationBalance := destinationAccount.BalancePence
+	if destinationBalance != 800 {
+		t.Fatalf("source account has incorrect balance, should have been 800, instead it's %v", sourceBalance)
+	}
+}

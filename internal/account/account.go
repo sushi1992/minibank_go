@@ -1,8 +1,12 @@
 package account
 
-import "errors"
+import (
+	"errors"
+	"sync"
+)
 
 type Account struct {
+	mu           sync.Mutex
 	ID           string
 	Owner        string
 	BalancePence int64
@@ -45,6 +49,9 @@ func (account *Account) Deposit(amountToDeposit int64) error {
 		return errors.New("amount to deposit should be greater than 0")
 	}
 
+	account.mu.Lock()
+	defer account.mu.Unlock()
+
 	account.BalancePence += amountToDeposit
 	return nil
 }
@@ -53,6 +60,9 @@ func (account *Account) Withdraw(amountToWithdraw int64) error {
 	if amountToWithdraw <= 0 {
 		return errors.New("withdrawal amount must be greater than 0")
 	}
+
+	account.mu.Lock()
+	defer account.mu.Unlock()
 
 	if amountToWithdraw > account.BalancePence {
 		return errors.New("insufficient funds")

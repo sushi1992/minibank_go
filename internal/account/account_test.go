@@ -1,6 +1,9 @@
 package account
 
-import "testing"
+import (
+	"sync"
+	"testing"
+)
 
 const startingBalance = 1000
 
@@ -152,5 +155,77 @@ func TestDepositOfNegativeValueResultsInError(t *testing.T) {
 
 	if account.BalancePence != previousBalance {
 		t.Fatalf("account balance should be %d, but is %d", previousBalance, account.BalancePence)
+	}
+}
+
+func TestConcurrentDeposits(t *testing.T) {
+	account, err := NewAccount("Acc1", "John Doe", CurrencyGBP)
+	if err != nil {
+		t.Fatalf("failed to create account: %v", err)
+	}
+
+	var wg sync.WaitGroup
+
+	for range 1000 {
+		wg.Go(func() {
+
+			err := account.Deposit(1)
+			if err != nil {
+				t.Errorf("deposit failed: %v", err)
+			}
+		})
+	}
+
+	wg.Wait()
+
+	if account.BalancePence != 1000 {
+		t.Errorf("expected balance 1000, got %d", account.BalancePence)
+	}
+}
+
+func TestChannelBasic(t *testing.T) {
+	ch := make(chan int)
+
+	go func() {
+		ch <- 42
+	}()
+
+	value := <-ch
+
+	if value != 42 {
+		t.Fatalf("expected 42, got %d", value)
+	}
+}
+
+func TestConcurrentDepositsUsingChannel(t *testing.T) {
+	account, err := NewAccount("Acc1", "John Doe", CurrencyGBP)
+	if err != nil {
+		t.Fatalf("failed to create account: %v", err)
+	}
+
+	deposits := make(chan int64)
+	done := make(chan struct{})
+
+	go func() {
+		for amount := range deposits {
+			err := account.Deposit(amount)
+			if err != nil {
+				t.Errorf("deposit failed: %v", err)
+			}
+		}
+
+		close(done)
+	}()
+
+	for range 1000 {
+		deposits <- 1
+	}
+
+	close(deposits)
+
+	<-done
+
+	if account.BalancePence != 1000 {
+		t.Fatalf("expected balance 1000, got %d", account.BalancePence)
 	}
 }
