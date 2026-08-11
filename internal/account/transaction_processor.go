@@ -35,10 +35,10 @@ func (p *TransactionProcessor) Submit(transaction Transaction) {
 }
 
 func (p *TransactionProcessor) Run() {
-	// using continue and not much error handling as just a test/non-production code
 	for transaction := range p.transactions {
 		account, err := p.repo.Get(transaction.AccountID)
 		if err != nil {
+			transaction.Result <- TransactionResult{Err: err}
 			continue
 		}
 
@@ -50,10 +50,15 @@ func (p *TransactionProcessor) Run() {
 		}
 
 		if err != nil {
+			transaction.Result <- TransactionResult{Err: err}
 			continue
 		}
 
-		p.repo.Save(account)
-		transaction.Result <- TransactionResult{Err: err}
+		err = p.repo.Save(account)
+		if err != nil {
+			transaction.Result <- TransactionResult{Err: err}
+			continue
+		}
+		transaction.Result <- TransactionResult{Err: nil}
 	}
 }

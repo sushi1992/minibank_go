@@ -36,3 +36,36 @@ func TestTransactionProcessorProcessesDeposit(t *testing.T) {
 		t.Fatalf("expected balance 500, got %d", account.BalancePence)
 	}
 }
+
+func TestTransactionProcessorWithdrawalFailure(t *testing.T) {
+	// submit a withdrawal of 100 against an account with 0,
+	// receive the result, and assert transactionResult.Err != nil.
+	repo := NewMemoryRepository()
+
+	accountId := "Acc1"
+	account, err := NewAccount(accountId, "Owner", CurrencyGBP)
+	if err != nil {
+		t.Fatalf("failed to create account: %v", err)
+	}
+
+	if err := repo.Save(account); err != nil {
+		t.Fatalf("failed to save account: %v", err)
+	}
+
+	processor := NewTransactionProcessor(repo)
+	result := make(chan TransactionResult)
+
+	go processor.Run()
+
+	processor.Submit(Transaction{
+		AccountID: accountId,
+		Type:      TransactionWithdrawal,
+		Amount:    100,
+		Result:    result,
+	})
+
+	transactionResult := <-result
+	if transactionResult.Err == nil {
+		t.Fatal("transaction passed when should have failed")
+	}
+}
