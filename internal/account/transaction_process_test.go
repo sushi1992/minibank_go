@@ -68,4 +68,8 @@ func TestTransactionProcessorWithdrawalFailure(t *testing.T) {
 	if transactionResult.Err == nil {
 		t.Fatal("transaction passed when should have failed")
 	}
+
+	if account.BalancePence != 0 {
+		t.Fatalf("expected balance to remain 0, got %d", account.BalancePence)
+	}
 }
