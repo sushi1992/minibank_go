@@ -164,7 +164,10 @@ func healthHandler(writer http.ResponseWriter, request *http.Request) {
 }
 
 func main() {
-	repo := account.NewMemoryRepository()
+	repo, err := account.NewCassandraRepository("127.0.0.1")
+	if err != nil {
+		panic(err)
+	}
 	service := account.NewService(repo)
 
 	http.HandleFunc("POST /accounts", createAccountHandler(service))
@@ -174,7 +177,7 @@ func main() {
 	http.HandleFunc("POST /accounts/{id}/withdraw", withdrawHandler(service))
 	http.HandleFunc("POST /transfers", transferHandler(service))
 
-	err := http.ListenAndServe(":8080", nil)
+	err = http.ListenAndServe(":8080", nil)
 	if err != nil {
 		panic(err)
 	}
