@@ -14,6 +14,53 @@ func NewService(repo Repository) *Service {
 	}
 }
 
+func (service *Service) GetAccount(id string) (*Account, error) {
+	account, err := service.repo.Get(id)
+	if err != nil {
+		return nil, fmt.Errorf("could not retrieve account %w", err)
+	}
+
+	return account, nil
+}
+
+func (service *Service) Withdraw(id string, amount int64) (*Account, error) {
+	account, err := service.repo.Get(id)
+	if err != nil {
+		return nil, fmt.Errorf("getting account: %w", err)
+	}
+
+	err = account.Withdraw(amount)
+	if err != nil {
+		return nil, fmt.Errorf("withdrawing from account: %w", err)
+	}
+
+	err = service.repo.Save(account)
+	if err != nil {
+		return nil, fmt.Errorf("saving account: %w", err)
+	}
+
+	return account, nil
+}
+
+func (service *Service) Deposit(id string, amount int64) (*Account, error) {
+	account, err := service.repo.Get(id)
+	if err != nil {
+		return nil, fmt.Errorf("getting account: %w", err)
+	}
+
+	err = account.Deposit(amount)
+	if err != nil {
+		return nil, fmt.Errorf("depositing into account: %w", err)
+	}
+
+	err = service.repo.Save(account)
+	if err != nil {
+		return nil, fmt.Errorf("saving account: %w", err)
+	}
+
+	return account, nil
+}
+
 func (service *Service) CreateAccount(id string, owner string, currency Currency) (*Account, error) {
 	account, err := NewAccount(id, owner, currency)
 	if err != nil {
