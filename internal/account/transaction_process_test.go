@@ -1,6 +1,9 @@
 package account
 
-import "testing"
+import (
+	"context"
+	"testing"
+)
 
 func TestTransactionProcessorProcessesDeposit(t *testing.T) {
 	repo := NewMemoryRepository()
@@ -17,14 +20,21 @@ func TestTransactionProcessorProcessesDeposit(t *testing.T) {
 	processor := NewTransactionProcessor(repo)
 	result := make(chan TransactionResult)
 
-	go processor.Run()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	processor.Submit(Transaction{
+	go processor.Run(ctx)
+
+	err = processor.Submit(ctx, Transaction{
 		AccountID: "Acc1",
 		Type:      TransactionDeposit,
 		Amount:    500,
 		Result:    result,
 	})
+
+	if err != nil {
+		t.Fatal("timeout occurred")
+	}
 
 	transactionResult := <-result
 
@@ -34,6 +44,59 @@ func TestTransactionProcessorProcessesDeposit(t *testing.T) {
 
 	if account.BalancePence != 500 {
 		t.Fatalf("expected balance 500, got %d", account.BalancePence)
+	}
+}
+
+func TestBufferedChannel(t *testing.T) {
+	ch := make(chan int, 2)
+
+	ch <- 10
+	ch <- 20
+
+	first := <-ch
+
+	ch <- 30
+
+	second := <-ch
+	third := <-ch
+
+	if first != 10 {
+		t.Fatalf("expected 10, got %d", first)
+	}
+
+	if second != 20 {
+		t.Fatalf("expected 20, got %d", second)
+	}
+
+	if third != 30 {
+		t.Fatalf("expected 30, got %d", third)
+	}
+}
+
+func TestBufferedChannelWithGoroutine(t *testing.T) {
+	ch := make(chan int, 2)
+
+	ch <- 10
+	ch <- 20
+
+	go func() {
+		ch <- 30
+	}()
+
+	first := <-ch
+	second := <-ch
+	third := <-ch
+
+	if first != 10 {
+		t.Fatalf("expected 10, got %d", first)
+	}
+
+	if second != 20 {
+		t.Fatalf("expected 20, got %d", second)
+	}
+
+	if third != 30 {
+		t.Fatalf("expected 30, got %d", third)
 	}
 }
 
@@ -55,14 +118,21 @@ func TestTransactionProcessorWithdrawalFailure(t *testing.T) {
 	processor := NewTransactionProcessor(repo)
 	result := make(chan TransactionResult)
 
-	go processor.Run()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	processor.Submit(Transaction{
+	go processor.Run(ctx)
+
+	err = processor.Submit(ctx, Transaction{
 		AccountID: accountId,
 		Type:      TransactionWithdrawal,
 		Amount:    100,
 		Result:    result,
 	})
+
+	if err != nil {
+		t.Fatal("timeout occurred")
+	}
 
 	transactionResult := <-result
 	if transactionResult.Err == nil {
