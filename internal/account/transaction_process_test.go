@@ -3,6 +3,7 @@ package account
 import (
 	"context"
 	"testing"
+	"time"
 )
 
 func TestTransactionProcessorProcessesDeposit(t *testing.T) {
@@ -141,5 +142,29 @@ func TestTransactionProcessorWithdrawalFailure(t *testing.T) {
 
 	if account.BalancePence != 0 {
 		t.Fatalf("expected balance to remain 0, got %d", account.BalancePence)
+	}
+}
+
+func TestTransactionProcessorStopsWhenContextCancelled(t *testing.T) {
+	repo := NewMemoryRepository()
+	processor := NewTransactionProcessor(repo)
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	done := make(chan struct{})
+
+	go func() {
+		processor.Run(ctx)
+		close(done)
+	}()
+
+	cancel()
+
+	select {
+	case <-done:
+		// processor stopped successfully
+
+	case <-time.After(2 * time.Second):
+		t.Fatal("processor did not stop after context cancellation")
 	}
 }
