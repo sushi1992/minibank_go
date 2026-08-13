@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
@@ -169,6 +170,18 @@ func main() {
 		panic(err)
 	}
 	service := account.NewService(repo)
+
+	publisher := account.NewKafkaPublisher("localhost:9092")
+	service.SetPublished(publisher)
+
+	ctx := context.Background()
+	consumer := account.NewKafkaConsumer("localhost:9092")
+	go func() {
+		err := consumer.Consume(ctx)
+		if err != nil {
+			// handle error
+		}
+	}()
 
 	http.HandleFunc("POST /accounts", createAccountHandler(service))
 	http.HandleFunc("GET /health", healthHandler)

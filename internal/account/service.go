@@ -5,13 +5,18 @@ import (
 )
 
 type Service struct {
-	repo Repository
+	repo      Repository
+	publisher EventPublisher
 }
 
 func NewService(repo Repository) *Service {
 	return &Service{
 		repo: repo,
 	}
+}
+
+func (service *Service) SetPublished(publisher EventPublisher) {
+	service.publisher = publisher
 }
 
 func (service *Service) GetAccount(id string) (*Account, error) {
@@ -58,6 +63,17 @@ func (service *Service) Deposit(id string, amount int64) (*Account, error) {
 		return nil, fmt.Errorf("saving account: %w", err)
 	}
 
+	if service.publisher != nil {
+		err = service.publisher.Publish("account-events", id, AccountEvent{
+			Type:      EventAccountDeposited,
+			AccountID: id,
+			Amount:    amount,
+		})
+
+		if err != nil {
+			return nil, fmt.Errorf("publishing deposit event: %w", err)
+		}
+	}
 	return account, nil
 }
 
