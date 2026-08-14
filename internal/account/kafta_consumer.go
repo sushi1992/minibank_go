@@ -3,6 +3,7 @@ package account
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/segmentio/kafka-go"
@@ -26,6 +27,10 @@ func (consumer *KafkaConsumer) Consume(ctx context.Context) error {
 	for {
 		message, err := consumer.reader.ReadMessage(ctx)
 		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				return nil
+			}
+
 			return err
 		}
 

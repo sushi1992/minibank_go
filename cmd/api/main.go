@@ -3,7 +3,13 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"os"
+	"os/signal"
+	"sync"
+	"syscall"
+	"time"
 
 	"github.com/sushi1992/minibank_go/internal/account"
 )
@@ -174,12 +180,20 @@ func main() {
 	publisher := account.NewKafkaPublisher("localhost:9092")
 	service.SetPublished(publisher)
 
-	ctx := context.Background()
+	ctx, stop := signal.NotifyContext(
+		context.Background(),
+		os.Interrupt,
+		syscall.SIGTERM,
+	)
+	defer stop()
 	consumer := account.NewKafkaConsumer("localhost:9092")
+	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		err := consumer.Consume(ctx)
 		if err != nil {
-			// handle error
+			fmt.Printf("consumer stopped with error: %v\n", err)
 		}
 	}()
 
@@ -190,8 +204,34 @@ func main() {
 	http.HandleFunc("POST /accounts/{id}/withdraw", withdrawHandler(service))
 	http.HandleFunc("POST /transfers", transferHandler(service))
 
-	err = http.ListenAndServe(":8080", nil)
-	if err != nil {
-		panic(err)
+	server := &http.Server{
+		Addr: ":8080",
 	}
+
+	go func() {
+		err := server.ListenAndServe()
+		if err != nil && err != http.ErrServerClosed {
+			fmt.Printf("http server error: %v\n", err)
+		}
+	}()
+
+	// Wait here until Ctrl+C / SIGTERM
+	<-ctx.Done()
+
+	fmt.Println("shutting down...")
+
+	shutdownCtx, cancel := context.WithTimeout(
+		context.Background(),
+		5*time.Second,
+	)
+	defer cancel()
+
+	err = server.Shutdown(shutdownCtx)
+	if err != nil {
+		fmt.Printf("http shutdown error: %v\n", err)
+	}
+
+	wg.Wait()
+
+	fmt.Print("shutdown complete")
 }
