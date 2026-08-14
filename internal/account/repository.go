@@ -7,8 +7,31 @@ type Repository interface {
 	Get(id string) (*Account, error)
 }
 
+type AccountTransactionStore interface {
+	SaveAccountAndOutboxEvent(
+		account *Account,
+		event OutboxEvent,
+	) error
+}
+
+type AccountStore interface {
+	Repository
+	AccountTransactionStore
+}
+
 type MemoryRepository struct {
 	accounts map[string]*Account
+	outbox   []OutboxEvent
+}
+
+func (repo *MemoryRepository) SaveAccountAndOutboxEvent(
+	account *Account,
+	event OutboxEvent,
+) error {
+	repo.accounts[account.ID] = account
+	repo.outbox = append(repo.outbox, event)
+
+	return nil
 }
 
 func NewMemoryRepository() *MemoryRepository {

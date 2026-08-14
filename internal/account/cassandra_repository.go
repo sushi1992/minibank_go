@@ -1,6 +1,10 @@
 package account
 
-import gocql "github.com/apache/cassandra-gocql-driver/v2"
+import (
+	"time"
+
+	gocql "github.com/apache/cassandra-gocql-driver/v2"
+)
 
 type CassandraRepository struct {
 	session *gocql.Session
@@ -18,6 +22,53 @@ func NewCassandraRepository(host string) (*CassandraRepository, error) {
 	return &CassandraRepository{
 		session: session,
 	}, nil
+}
+
+func (repo *CassandraRepository) SaveAccountAndOutboxEvent(account *Account, event OutboxEvent) error {
+	batch := repo.session.Batch(gocql.LoggedBatch)
+	accountQuery := `
+		INSERT INTO accounts (
+			id,
+			owner,
+			balance_pence,
+			currency
+		)
+		VALUES (?, ?, ?, ?)
+	`
+
+	batch.Query(accountQuery,
+		account.ID,
+		account.Owner,
+		account.BalancePence,
+		string(account.Currency),
+	)
+
+	outboxQuery := `
+		INSERT INTO outbox_pending (
+			bucket,
+			created_at,
+			event_id,
+			account_id,
+			event_type,
+			payload
+		)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`
+
+	batch.Query(outboxQuery,
+		"default",
+		time.Now(),
+		event.EventID,
+		event.AccountID,
+		event.Type,
+		event.Payload)
+
+	err := batch.Exec()
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (repo *CassandraRepository) Save(account *Account) error {

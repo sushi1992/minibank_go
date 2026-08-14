@@ -1,26 +1,25 @@
 package account
 
 import (
+	"encoding/json"
 	"fmt"
+	"time"
+
+	gocql "github.com/apache/cassandra-gocql-driver/v2"
 )
 
 type Service struct {
-	repo      Repository
-	publisher EventPublisher
+	store AccountStore
 }
 
-func NewService(repo Repository) *Service {
+func NewService(store AccountStore) *Service {
 	return &Service{
-		repo: repo,
+		store: store,
 	}
 }
 
-func (service *Service) SetPublished(publisher EventPublisher) {
-	service.publisher = publisher
-}
-
 func (service *Service) GetAccount(id string) (*Account, error) {
-	account, err := service.repo.Get(id)
+	account, err := service.store.Get(id)
 	if err != nil {
 		return nil, fmt.Errorf("could not retrieve account %w", err)
 	}
@@ -29,7 +28,7 @@ func (service *Service) GetAccount(id string) (*Account, error) {
 }
 
 func (service *Service) Withdraw(id string, amount int64) (*Account, error) {
-	account, err := service.repo.Get(id)
+	account, err := service.store.Get(id)
 	if err != nil {
 		return nil, fmt.Errorf("getting account: %w", err)
 	}
@@ -39,7 +38,7 @@ func (service *Service) Withdraw(id string, amount int64) (*Account, error) {
 		return nil, fmt.Errorf("withdrawing from account: %w", err)
 	}
 
-	err = service.repo.Save(account)
+	err = service.store.Save(account)
 	if err != nil {
 		return nil, fmt.Errorf("saving account: %w", err)
 	}
@@ -48,7 +47,7 @@ func (service *Service) Withdraw(id string, amount int64) (*Account, error) {
 }
 
 func (service *Service) Deposit(id string, amount int64) (*Account, error) {
-	account, err := service.repo.Get(id)
+	account, err := service.store.Get(id)
 	if err != nil {
 		return nil, fmt.Errorf("getting account: %w", err)
 	}
@@ -58,21 +57,27 @@ func (service *Service) Deposit(id string, amount int64) (*Account, error) {
 		return nil, fmt.Errorf("depositing into account: %w", err)
 	}
 
-	err = service.repo.Save(account)
+	event := AccountEvent{
+		Type:      EventAccountDeposited,
+		AccountID: account.ID,
+		Amount:    amount,
+		EventID:   gocql.UUIDFromTime(time.Now()),
+	}
+	payload, err := json.Marshal(event)
 	if err != nil {
-		return nil, fmt.Errorf("saving account: %w", err)
+		return nil, fmt.Errorf("json marshalling failed: %v", err)
 	}
 
-	if service.publisher != nil {
-		err = service.publisher.Publish("account-events", id, AccountEvent{
-			Type:      EventAccountDeposited,
-			AccountID: id,
-			Amount:    amount,
-		})
+	outboxEvent := OutboxEvent{
+		EventID:   event.EventID,
+		AccountID: event.AccountID,
+		Type:      event.Type,
+		Payload:   string(payload),
+	}
 
-		if err != nil {
-			return nil, fmt.Errorf("publishing deposit event: %w", err)
-		}
+	err = service.store.SaveAccountAndOutboxEvent(account, outboxEvent)
+	if err != nil {
+		return nil, fmt.Errorf("publishing deposit event: %w", err)
 	}
 	return account, nil
 }
@@ -83,7 +88,7 @@ func (service *Service) CreateAccount(id string, owner string, currency Currency
 		return nil, fmt.Errorf("creating account: %w", err)
 	}
 
-	err = service.repo.Save(account)
+	err = service.store.Save(account)
 	if err != nil {
 		return nil, fmt.Errorf("saving account: %w", err)
 	}
@@ -92,12 +97,12 @@ func (service *Service) CreateAccount(id string, owner string, currency Currency
 }
 
 func (service *Service) Transfer(fromID string, toID string, amount int64) error {
-	sourceAccount, err := service.repo.Get(fromID)
+	sourceAccount, err := service.store.Get(fromID)
 	if err != nil {
 		return fmt.Errorf("error retrieving source account: %w", err)
 	}
 
-	destinationAccount, err := service.repo.Get(toID)
+	destinationAccount, err := service.store.Get(toID)
 	if err != nil {
 		return fmt.Errorf("error retrieving destination account: %w", err)
 	}
@@ -112,12 +117,12 @@ func (service *Service) Transfer(fromID string, toID string, amount int64) error
 		return fmt.Errorf("error occurred when attempting deposit: %w", err)
 	}
 
-	err = service.repo.Save(sourceAccount)
+	err = service.store.Save(sourceAccount)
 	if err != nil {
 		return fmt.Errorf("error occurred when saving source account information: %w", err)
 	}
 
-	err = service.repo.Save(destinationAccount)
+	err = service.store.Save(destinationAccount)
 	if err != nil {
 		return fmt.Errorf("error occurred when saving destination account information: %w", err)
 	}

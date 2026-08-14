@@ -177,8 +177,12 @@ func main() {
 	}
 	service := account.NewService(repo)
 
-	publisher := account.NewKafkaPublisher("localhost:9092")
-	service.SetPublished(publisher)
+	// TODO: add publisher with outbox processor
+	// publisher := account.NewKafkaPublisher("localhost:9092")
+	// outboxProcessor := account.NewOutboxProcessor(
+	// 	repo,
+	// 	publisher,
+	// )
 
 	ctx, stop := signal.NotifyContext(
 		context.Background(),
