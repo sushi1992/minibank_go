@@ -177,21 +177,30 @@ func main() {
 	}
 	service := account.NewService(repo)
 
-	// TODO: add publisher with outbox processor
-	// publisher := account.NewKafkaPublisher("localhost:9092")
-	// outboxProcessor := account.NewOutboxProcessor(
-	// 	repo,
-	// 	publisher,
-	// )
-
 	ctx, stop := signal.NotifyContext(
 		context.Background(),
 		os.Interrupt,
 		syscall.SIGTERM,
 	)
+
 	defer stop()
-	consumer := account.NewKafkaConsumer("localhost:9092")
+
 	var wg sync.WaitGroup
+	publisher := account.NewKafkaPublisher("127.0.0.1:9092")
+	outboxProcessor := account.NewOutboxProcessor(
+		repo,
+		publisher,
+	)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		err := outboxProcessor.Run(ctx)
+		if err != nil {
+			fmt.Printf("outbox processor stopped with error: %v\n", err)
+		}
+	}()
+
+	consumer := account.NewKafkaConsumer("127.0.0.1:9092")
 	wg.Add(1)
 	go func() {
 		defer wg.Done()

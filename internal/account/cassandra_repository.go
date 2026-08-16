@@ -24,6 +24,40 @@ func NewCassandraRepository(host string) (*CassandraRepository, error) {
 	}, nil
 }
 
+func (repo *CassandraRepository) GetPendingOutboxEvents(limit int) ([]OutboxEvent, error) {
+	outboxEventsQuery := `SELECT created_at, event_id, account_id, event_type, payload FROM outbox_pending WHERE bucket = ? LIMIT ?`
+
+	iter := repo.session.Query(outboxEventsQuery, "default", limit).Iter()
+
+	var outboxEvents []OutboxEvent
+	for {
+		var event OutboxEvent
+
+		if !iter.Scan(
+			&event.CreatedAt,
+			&event.EventID,
+			&event.AccountID,
+			&event.Type,
+			&event.Payload,
+		) {
+			break
+		}
+
+		outboxEvents = append(outboxEvents, event)
+	}
+
+	if err := iter.Close(); err != nil {
+		return nil, err
+	}
+
+	return outboxEvents, nil
+}
+
+func (repo *CassandraRepository) DeleteOutboxEvent(outboxEvent OutboxEvent) error {
+	deleteOutboxEventQuery := `DELETE FROM outbox_pending WHERE bucket = ? AND created_at = ? AND event_id = ?`
+	return repo.session.Query(deleteOutboxEventQuery, "default", outboxEvent.CreatedAt, outboxEvent.EventID).Exec()
+}
+
 func (repo *CassandraRepository) SaveAccountAndOutboxEvent(account *Account, event OutboxEvent) error {
 	batch := repo.session.Batch(gocql.LoggedBatch)
 	accountQuery := `

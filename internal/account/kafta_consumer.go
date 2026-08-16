@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/segmentio/kafka-go"
 )
@@ -31,7 +32,10 @@ func (consumer *KafkaConsumer) Consume(ctx context.Context) error {
 				return nil
 			}
 
-			return err
+			fmt.Printf("consumer read failed: %v\n", err)
+
+			time.Sleep(2 * time.Second)
+			continue
 		}
 
 		var event AccountEvent
